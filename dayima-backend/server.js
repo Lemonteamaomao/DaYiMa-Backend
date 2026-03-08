@@ -4,8 +4,16 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
 
+const cors = require("cors");
+const express = require("express");
 const app = express();
-app.use(cors());
+
+// Allow only your frontend domain
+app.use(cors({
+  origin: "https://lemonteamaomao.github.io", // your frontend
+  credentials: true, // if you ever send cookies/auth headers
+}));
+
 app.use(express.json());
 
 // ----------------------
