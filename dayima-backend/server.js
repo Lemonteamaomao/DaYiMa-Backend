@@ -54,8 +54,8 @@ const Booking = mongoose.model("Booking", bookingSchema);
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "victoriakjx@gmail.com",
-    pass: "glxvfkfpupdijjbt",
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS,
   },
 });
 
