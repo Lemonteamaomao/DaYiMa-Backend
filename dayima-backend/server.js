@@ -10,7 +10,7 @@ const app = express();
 // 1. CORS Configuration
 // ----------------------
 app.use(cors({
-  origin: "https://lemonteamaomao.github.io", // your frontend domain
+  origin: "https://lemonteamaomao.github.io", // frontend domain
   credentials: true,
 }));
 
@@ -29,10 +29,22 @@ app.get("/", (req, res) => {
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ Connection Error:", err));
+  .catch(err => console.error("❌ Connection Error:", err));
 
 // ----------------------
-// 4. Booking Schema
+// 4. Test MongoDB
+// ----------------------
+app.get("/test-db", async (req, res) => {
+  try {
+    await mongoose.connection.db.admin().ping();
+    res.send("✅ MongoDB Connected!");
+  } catch (err) {
+    res.status(500).send("❌ MongoDB Connection Failed: " + err.message);
+  }
+});
+
+// ----------------------
+// 5. Booking Schema
 // ----------------------
 const bookingSchema = new mongoose.Schema({
   workshopType: String,
@@ -49,7 +61,7 @@ const bookingSchema = new mongoose.Schema({
 const Booking = mongoose.model("Booking", bookingSchema);
 
 // ----------------------
-// 5. Email Setup
+// 6. Email Setup
 // ----------------------
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -60,7 +72,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ----------------------
-// 6. API Routes
+// 7. API Routes
 // ----------------------
 
 // Create booking
@@ -69,23 +81,29 @@ app.post("/api/book-hygiene", async (req, res) => {
     const newBooking = new Booking(req.body);
     await newBooking.save();
 
-    const mailOptions = {
-      from: '"DaYiMa Admin" <victoriakjx@gmail.com>',
-      to: "victoriakjx@gmail.com",
-      subject: `🌸 NEW ${req.body.workshopType} REQUEST: ${req.body.organization}`,
-      html: `<div style="font-family: sans-serif; padding: 20px; border: 2px solid #FF2DA6; border-radius: 20px;">
-        <h2 style="color: #FF2DA6;">New Booking Alert!</h2>
-        <p><strong>Workshop:</strong> ${req.body.workshopType}</p>
-        <p><strong>Organization:</strong> ${req.body.organization}</p>
-        <p><strong>Contact:</strong> ${req.body.contactPerson}</p>
-        <p><strong>Date:</strong> ${req.body.date}</p>
-        <p><strong>Email:</strong> ${req.body.email}</p>
-        <p><strong>Phone:</strong> ${req.body.phone}</p>
-        <p><strong>Notes:</strong> ${req.body.notes || "None"}</p>
-      </div>`,
-    };
+    // Send email
+    try {
+      const mailOptions = {
+        from: `"DaYiMa Admin" <${process.env.GMAIL_USER}>`,
+        to: process.env.GMAIL_USER,
+        subject: `🌸 NEW ${req.body.workshopType} REQUEST: ${req.body.organization}`,
+        html: `<div style="font-family: sans-serif; padding: 20px; border: 2px solid #FF2DA6; border-radius: 20px;">
+          <h2 style="color: #FF2DA6;">New Booking Alert!</h2>
+          <p><strong>Workshop:</strong> ${req.body.workshopType}</p>
+          <p><strong>Organization:</strong> ${req.body.organization}</p>
+          <p><strong>Contact:</strong> ${req.body.contactPerson}</p>
+          <p><strong>Date:</strong> ${req.body.date}</p>
+          <p><strong>Email:</strong> ${req.body.email}</p>
+          <p><strong>Phone:</strong> ${req.body.phone}</p>
+          <p><strong>Notes:</strong> ${req.body.notes || "None"}</p>
+        </div>`,
+      };
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking email sent:", info.response);
+    } catch (err) {
+      console.error("❌ Email failed:", err);
+    }
 
-    transporter.sendMail(mailOptions);
     res.status(201).json({ message: `Success! ${req.body.workshopType} request sent.` });
   } catch (error) {
     console.error("❌ Error creating booking:", error);
@@ -111,24 +129,24 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
     const bookingToDelete = await Booking.findById(bookingId);
     if (!bookingToDelete) return res.status(404).json({ message: "Booking not found" });
 
-    const cancelMailOptions = {
-      from: '"DaYiMa Project System" <victoriakjx@gmail.com>',
-      to: "victoriakjx@gmail.com",
-      subject: `🛑 CANCELLED: ${bookingToDelete.workshopType} - ${bookingToDelete.organization}`,
-      html: `<div style="font-family: sans-serif; padding: 25px; border: 3px solid #AD46FF; border-radius: 30px; background-color: #F9F5FF;">
-        <h2 style="color: #AD46FF;">Booking Removed</h2>
-        <p><strong>Workshop:</strong> ${bookingToDelete.workshopType}</p>
-        <p><strong>Organization:</strong> ${bookingToDelete.organization}</p>
-        <p><strong>Contact:</strong> ${bookingToDelete.contactPerson}</p>
-      </div>`,
-    };
-
-    await new Promise((resolve, reject) => {
-      transporter.sendMail(cancelMailOptions, (error, info) => {
-        if (error) reject(error);
-        else resolve(info);
-      });
-    });
+    // Send cancellation email
+    try {
+      const cancelMailOptions = {
+        from: `"DaYiMa Admin" <${process.env.GMAIL_USER}>`,
+        to: process.env.GMAIL_USER,
+        subject: `🛑 CANCELLED: ${bookingToDelete.workshopType} - ${bookingToDelete.organization}`,
+        html: `<div style="font-family: sans-serif; padding: 25px; border: 3px solid #AD46FF; border-radius: 30px; background-color: #F9F5FF;">
+          <h2 style="color: #AD46FF;">Booking Removed</h2>
+          <p><strong>Workshop:</strong> ${bookingToDelete.workshopType}</p>
+          <p><strong>Organization:</strong> ${bookingToDelete.organization}</p>
+          <p><strong>Contact:</strong> ${bookingToDelete.contactPerson}</p>
+        </div>`,
+      };
+      const info = await transporter.sendMail(cancelMailOptions);
+      console.log("✅ Cancellation email sent:", info.response);
+    } catch (err) {
+      console.error("❌ Cancellation email failed:", err);
+    }
 
     await Booking.findByIdAndDelete(bookingId);
     res.json({ message: "Booking deleted and confirmation email sent!" });
@@ -139,7 +157,7 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
 });
 
 // ----------------------
-// 7. Start Server
+// 8. Start Server
 // ----------------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on Port ${PORT}`));
