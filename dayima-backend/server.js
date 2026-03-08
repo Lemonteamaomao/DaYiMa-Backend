@@ -4,27 +4,27 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
 
-const cors = require("cors");
-const express = require("express");
 const app = express();
 
-// Allow only your frontend domain
+// ----------------------
+// 1. CORS Configuration
+// ----------------------
 app.use(cors({
-  origin: "https://lemonteamaomao.github.io", // your frontend
-  credentials: true, // if you ever send cookies/auth headers
+  origin: "https://lemonteamaomao.github.io", // your frontend domain
+  credentials: true,
 }));
 
 app.use(express.json());
 
 // ----------------------
-// 1. Root Route
+// 2. Root Route
 // ----------------------
 app.get("/", (req, res) => {
   res.send("✅ DaYiMa backend is running!");
 });
 
 // ----------------------
-// 2. Database Connection
+// 3. Database Connection
 // ----------------------
 mongoose
   .connect(process.env.MONGO_URI)
@@ -32,7 +32,7 @@ mongoose
   .catch((err) => console.error("❌ Connection Error:", err));
 
 // ----------------------
-// 3. Booking Schema
+// 4. Booking Schema
 // ----------------------
 const bookingSchema = new mongoose.Schema({
   workshopType: String,
@@ -49,7 +49,7 @@ const bookingSchema = new mongoose.Schema({
 const Booking = mongoose.model("Booking", bookingSchema);
 
 // ----------------------
-// 4. Email Setup
+// 5. Email Setup
 // ----------------------
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -60,7 +60,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ----------------------
-// 5. API Routes
+// 6. API Routes
 // ----------------------
 
 // Create booking
@@ -88,6 +88,7 @@ app.post("/api/book-hygiene", async (req, res) => {
     transporter.sendMail(mailOptions);
     res.status(201).json({ message: `Success! ${req.body.workshopType} request sent.` });
   } catch (error) {
+    console.error("❌ Error creating booking:", error);
     res.status(500).json({ message: "Server Error" });
   }
 });
@@ -98,6 +99,7 @@ app.get("/api/book-hygiene", async (req, res) => {
     const bookings = await Booking.find().sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
+    console.error("❌ Error fetching bookings:", err);
     res.status(500).json({ message: "Could not load bookings" });
   }
 });
@@ -131,12 +133,13 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
     await Booking.findByIdAndDelete(bookingId);
     res.json({ message: "Booking deleted and confirmation email sent!" });
   } catch (err) {
+    console.error("❌ Error deleting booking:", err);
     res.status(500).json({ message: "Cancellation failed" });
   }
 });
 
 // ----------------------
-// 6. Start Server
+// 7. Start Server
 // ----------------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on Port ${PORT}`));
