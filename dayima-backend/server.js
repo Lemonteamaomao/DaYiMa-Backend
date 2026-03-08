@@ -1,158 +1,147 @@
-// ================================
-// GLOBAL VARIABLES
-// ================================
-const BACKEND_URL = "https://dayima-backend.onrender.com"; // Update to your deployed backend
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
-// ================================
-// 1. TOGGLE BOOKING CARD
-// ================================
-function toggleCard(headerElement) {
-  const card = headerElement.closest(".booking-card");
-  if (card) {
-    card.classList.toggle("is-expanded");
+const app = express();
+
+/* ---------------- CORS ---------------- */
+app.use(cors({
+  origin: "https://lemonteamaomao.github.io", // update if needed
+  credentials: true
+}));
+
+app.use(express.json());
+
+/* ---------------- MongoDB ---------------- */
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => console.error("❌ MongoDB Error:", err));
+
+/* ---------------- Schema ---------------- */
+const bookingSchema = new mongoose.Schema({
+  workshopType: String,
+  organization: String,
+  contactPerson: String,
+  email: String,
+  phone: String,
+  participants: Number,
+  preferredDate: String,
+  message: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Booking = mongoose.model("Booking", bookingSchema);
+
+/* ---------------- Email ---------------- */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS
   }
-}
+});
 
-// ================================
-// 2. CAROUSEL LOGIC
-// ================================
-function startCarousel() {
-  const carousel = document.getElementById("cardStack");
-  if (!carousel) return;
+/* ---------------- Routes ---------------- */
+app.get("/", (req, res) => {
+  res.send("DaYiMa backend running");
+});
 
-  const images = carousel.querySelectorAll("img.card");
-  if (images.length === 0) return;
+app.get("/test-db", async (req, res) => {
+  const bookings = await Booking.find();
+  res.json(bookings);
+});
 
-  let currentIndex = 0;
-  images.forEach((img, i) => {
-    img.style.display = i === 0 ? "block" : "none"; // Show first image
-  });
-
-  setInterval(() => {
-    images[currentIndex].style.display = "none";
-    currentIndex = (currentIndex + 1) % images.length;
-    images[currentIndex].style.display = "block";
-  }, 3000); // Change every 3s
-}
-
-// ================================
-// 3. LOAD BOOKINGS
-// ================================
-async function loadBookings() {
-  const container = document.getElementById("bookingsList");
-  if (!container) return;
-
+/* -------- Create Booking -------- */
+app.post("/api/book-hygiene", async (req, res) => {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/book-hygiene`);
-    const bookings = await res.json();
+    const booking = new Booking(req.body);
+    await booking.save();
 
-    container.innerHTML = "";
-
-    if (!bookings || bookings.length === 0) {
-      container.innerHTML =
-        "<p style='text-align:center;'>No bookings yet.</p>";
-      return;
-    }
-
-    bookings.forEach((b) => {
-      const div = document.createElement("div");
-      div.className = "booking-card";
-
-      div.innerHTML = `
-        <div class="card-header" onclick="toggleCard(this)">
-          <div class="header-left">
-            <span class="tag">${b.workshopType || "Workshop Request"}</span>
-            <h3>${b.organization || "Unnamed Organization"}</h3>
-          </div>
-          <div class="header-right">
-            <span class="toggle-icon">▼</span>
-          </div>
-        </div>
-
-        <div class="card-content">
-          <div class="booking-details">
-            <p><strong>Contact:</strong> ${b.contactPerson || "N/A"}</p>
-            <p><strong>Email:</strong> ${b.email || "No email"}</p>
-            <p><strong>Phone:</strong> ${b.phone || "No phone"}</p>
-            <p><strong>Date:</strong> ${b.preferredDate || "TBD"}</p>
-            <p><strong>Participants:</strong> ${b.participants || 0}</p>
-          </div>
-
-          ${b.message ? `<div class="notes-box"><strong>Notes:</strong> ${b.message}</div>` : ""}
-
-          <button class="btn-cancel" onclick="cancelBooking('${b._id}')">Cancel Request →</button>
-        </div>
-      `;
-      container.appendChild(div);
-    });
-  } catch (err) {
-    console.error("❌ Error loading bookings:", err);
-    if (container) {
-      container.innerHTML =
-        "<p style='color:red;text-align:center;'>Cannot connect to backend.</p>";
-    }
-  }
-}
-
-// ================================
-// 4. CANCEL BOOKING
-// ================================
-async function cancelBooking(id) {
-  if (!confirm("Delete this booking?")) return;
-
-  try {
-    await fetch(`${BACKEND_URL}/api/book-hygiene/${id}`, {
-      method: "DELETE",
-    });
-    loadBookings();
-  } catch (err) {
-    alert("Failed to delete booking.");
-    console.error(err);
-  }
-}
-
-// ================================
-// 5. HANDLE FORM SUBMISSION
-// ================================
-const hygieneForm = document.getElementById("hygieneForm");
-if (hygieneForm) {
-  hygieneForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const formData = {
-      workshopType: document.getElementById("workshopType").value,
-      organization: document.getElementById("organization").value,
-      contactPerson: document.getElementById("contactPerson").value,
-      email: document.getElementById("email").value,
-      phone: document.getElementById("phone").value,
-      preferredDate: document.getElementById("date").value,
-      participants: document.getElementById("participants").value,
-      message: document.getElementById("notes").value,
+    const mailOptions = {
+      from: `"DaYiMa Booking" <${process.env.GMAIL_USER}>`,
+      to: process.env.GMAIL_USER,
+      subject: `New Workshop Booking - ${req.body.workshopType}`,
+      html: `
+      <div style="font-family:sans-serif;padding:25px;border:3px solid #AD46FF;border-radius:30px;background:#F9F5FF">
+        <h2 style="color:#AD46FF">New Booking Request</h2>
+        <p><strong>Workshop:</strong> ${req.body.workshopType}</p>
+        <p><strong>Organization:</strong> ${req.body.organization}</p>
+        <p><strong>Contact:</strong> ${req.body.contactPerson}</p>
+        <p><strong>Email:</strong> ${req.body.email}</p>
+        <p><strong>Phone:</strong> ${req.body.phone}</p>
+        <p><strong>Participants:</strong> ${req.body.participants}</p>
+        <p><strong>Date:</strong> ${req.body.preferredDate}</p>
+        <p><strong>Message:</strong> ${req.body.message}</p>
+      </div>
+      `
     };
 
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/book-hygiene`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
+    /* EMAIL (non-blocking) */
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) console.error("❌ Email failed:", err);
+      else console.log("✅ Email sent:", info.response);
+    });
 
-      if (!res.ok) throw new Error("Submission failed");
+    res.status(201).json({ message: "Booking submitted!" });
 
-      alert("🎉 Request submitted successfully!");
-      hygieneForm.reset();
-      loadBookings();
-    } catch (err) {
-      console.error("❌ Submission error:", err);
-      alert("Could not connect to the backend.");
+  } catch (err) {
+    console.error("❌ Booking error:", err);
+    res.status(500).json({ message: "Booking failed" });
+  }
+});
+
+/* -------- Get Bookings -------- */
+app.get("/api/bookings", async (req, res) => {
+  try {
+    const bookings = await Booking.find().sort({ createdAt: -1 });
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ message: "Could not load bookings" });
+  }
+});
+
+/* -------- Delete Booking -------- */
+app.delete("/api/book-hygiene/:id", async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
     }
-  });
-}
 
-// ================================
-// 6. INITIALIZE
-// ================================
-document.addEventListener("DOMContentLoaded", () => {
-  startCarousel();
-  loadBookings();
+    await Booking.findByIdAndDelete(req.params.id);
+
+    /* EMAIL (non-blocking) */
+    transporter.sendMail({
+      from: `"DaYiMa Admin" <${process.env.GMAIL_USER}>`,
+      to: process.env.GMAIL_USER,
+      subject: `Booking Cancelled - ${booking.organization}`,
+      html: `
+      <div style="font-family:sans-serif;padding:25px;border:3px solid #AD46FF;border-radius:30px;background:#F9F5FF">
+        <h2 style="color:#AD46FF">Booking Cancelled</h2>
+        <p><strong>Workshop:</strong> ${booking.workshopType}</p>
+        <p><strong>Organization:</strong> ${booking.organization}</p>
+        <p><strong>Contact:</strong> ${booking.contactPerson}</p>
+      </div>
+      `
+    }, (err, info) => {
+      if (err) console.error("❌ Cancel email failed:", err);
+      else console.log("✅ Cancel email sent:", info.response);
+    });
+
+    res.json({ message: "Booking deleted" });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Delete failed" });
+  }
+});
+
+/* ---------------- Server ---------------- */
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
