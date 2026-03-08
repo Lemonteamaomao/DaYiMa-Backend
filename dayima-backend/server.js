@@ -1,152 +1,127 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const nodemailer = require("nodemailer");
-require("dotenv").config();
+const BACKEND_URL = "https://dayima-backend.onrender.com";
 
-const app = express();
+/* LOAD BOOKINGS */
 
-/* ---------------- CORS ---------------- */
+async function loadBookings() {
 
-app.use(cors());
-app.use(express.json());
+  const container = document.getElementById("bookingsList");
+  if (!container) return;
 
-/* ---------------- MongoDB ---------------- */
-
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Error:", err));
-
-/* ---------------- Schema ---------------- */
-
-const bookingSchema = new mongoose.Schema({
-  workshopType: String,
-  organization: String,
-  contactPerson: String,
-  email: String,
-  phone: String,
-  participants: Number,
-  preferredDate: String,
-  message: String,
-  createdAt: { type: Date, default: Date.now }
-});
-
-const Booking = mongoose.model("Booking", bookingSchema);
-
-/* ---------------- Email ---------------- */
-
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS
-  }
-});
-
-/* ---------------- Routes ---------------- */
-
-app.get("/", (req, res) => {
-  res.send("DaYiMa backend running");
-});
-
-/* -------- Get Bookings -------- */
-
-app.get("/api/bookings", async (req, res) => {
-  try {
-    const bookings = await Booking.find().sort({ createdAt: -1 });
-    res.json(bookings);
-  } catch (err) {
-    res.status(500).json({ message: "Could not load bookings" });
-  }
-});
-
-/* -------- Create Booking -------- */
-
-app.post("/api/book-hygiene", async (req, res) => {
   try {
 
-    const booking = new Booking(req.body);
-    await booking.save();
+    const response = await fetch(`${BACKEND_URL}/api/bookings`);
 
-    const mailOptions = {
-      from: `"DaYiMa Booking" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
-      subject: `New Workshop Booking - ${req.body.workshopType}`,
-      html: `
-      <div style="font-family:sans-serif;padding:25px;border:3px solid #AD46FF;border-radius:30px;background:#F9F5FF">
-        <h2 style="color:#AD46FF">New Booking Request</h2>
+    const bookings = await response.json();
 
-        <p><strong>Workshop:</strong> ${req.body.workshopType}</p>
-        <p><strong>Organization:</strong> ${req.body.organization}</p>
-        <p><strong>Contact:</strong> ${req.body.contactPerson}</p>
-        <p><strong>Email:</strong> ${req.body.email}</p>
-        <p><strong>Phone:</strong> ${req.body.phone}</p>
-        <p><strong>Participants:</strong> ${req.body.participants}</p>
-        <p><strong>Date:</strong> ${req.body.preferredDate}</p>
-        <p><strong>Message:</strong> ${req.body.message}</p>
+    container.innerHTML = "";
 
-      </div>
-      `
-    };
+    if (bookings.length === 0) {
 
-    transporter.sendMail(mailOptions).catch(err =>
-      console.log("Email failed:", err)
-    );
+      container.innerHTML = "<p>No bookings yet.</p>";
+      return;
 
-    res.status(201).json({ message: "Booking submitted!" });
-
-  } catch (err) {
-
-    console.error(err);
-    res.status(500).json({ message: "Booking failed" });
-
-  }
-});
-
-/* -------- Delete Booking -------- */
-
-app.delete("/api/book-hygiene/:id", async (req, res) => {
-  try {
-
-    const booking = await Booking.findById(req.params.id);
-
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
     }
 
-    await Booking.findByIdAndDelete(req.params.id);
+    bookings.forEach((b) => {
 
-    transporter.sendMail({
-      from: `"DaYiMa Admin" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
-      subject: `Booking Cancelled - ${booking.organization}`,
-      html: `
-      <div style="font-family:sans-serif;padding:25px;border:3px solid #AD46FF;border-radius:30px;background:#F9F5FF">
-        <h2 style="color:#AD46FF">Booking Cancelled</h2>
+      const div = document.createElement("div");
 
-        <p><strong>Workshop:</strong> ${booking.workshopType}</p>
-        <p><strong>Organization:</strong> ${booking.organization}</p>
-        <p><strong>Contact:</strong> ${booking.contactPerson}</p>
+      div.innerHTML = `
+        <h3>${b.organization}</h3>
+        <p><strong>Workshop:</strong> ${b.workshopType}</p>
+        <p><strong>Contact:</strong> ${b.contactPerson}</p>
+        <p><strong>Email:</strong> ${b.email}</p>
+        <p><strong>Date:</strong> ${b.preferredDate}</p>
+        <p><strong>Participants:</strong> ${b.participants}</p>
 
-      </div>
-      `
-    }).catch(err => console.log("Cancel email failed:", err));
+        <button onclick="cancelBooking('${b._id}')">
+        Delete
+        </button>
 
-    res.json({ message: "Booking deleted" });
+        <hr>
+      `;
+
+      container.appendChild(div);
+
+    });
 
   } catch (err) {
 
     console.error(err);
-    res.status(500).json({ message: "Delete failed" });
+
+    container.innerHTML =
+      "<p style='color:red'>Cannot connect to backend.</p>";
 
   }
-});
+}
 
-/* ---------------- Server ---------------- */
+/* DELETE BOOKING */
 
-const PORT = process.env.PORT || 3000;
+async function cancelBooking(id) {
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+  if (!confirm("Delete this booking?")) return;
+
+  await fetch(`${BACKEND_URL}/api/book-hygiene/${id}`, {
+    method: "DELETE"
+  });
+
+  loadBookings();
+
+}
+
+/* FORM SUBMIT */
+
+const hygieneForm = document.getElementById("hygieneForm");
+
+if (hygieneForm) {
+
+  hygieneForm.addEventListener("submit", async (e) => {
+
+    e.preventDefault();
+
+    const formData = {
+
+      workshopType: document.getElementById("workshopType").value,
+      organization: document.getElementById("organization").value,
+      contactPerson: document.getElementById("contactPerson").value,
+      email: document.getElementById("email").value,
+      phone: document.getElementById("phone").value,
+      preferredDate: document.getElementById("date").value,
+      participants: document.getElementById("participants").value,
+      message: document.getElementById("notes").value
+
+    };
+
+    try {
+
+      const res = await fetch(`${BACKEND_URL}/api/book-hygiene`, {
+
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(formData)
+
+      });
+
+      if (!res.ok) throw new Error();
+
+      alert("Booking submitted!");
+
+      hygieneForm.reset();
+
+      loadBookings();
+
+    } catch {
+
+      alert("Could not connect to backend.");
+
+    }
+
+  });
+
+}
+
+/* INITIALIZE */
+
+document.addEventListener("DOMContentLoaded", loadBookings);
