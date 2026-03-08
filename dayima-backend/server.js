@@ -7,20 +7,19 @@ require("dotenv").config();
 const app = express();
 
 /* ---------------- CORS ---------------- */
-app.use(cors({
-  origin: "https://lemonteamaomao.github.io",
-  credentials: true
-}));
 
+app.use(cors());
 app.use(express.json());
 
 /* ---------------- MongoDB ---------------- */
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Error:", err));
 
 /* ---------------- Schema ---------------- */
+
 const bookingSchema = new mongoose.Schema({
   workshopType: String,
   organization: String,
@@ -36,6 +35,7 @@ const bookingSchema = new mongoose.Schema({
 const Booking = mongoose.model("Booking", bookingSchema);
 
 /* ---------------- Email ---------------- */
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -50,9 +50,15 @@ app.get("/", (req, res) => {
   res.send("DaYiMa backend running");
 });
 
-app.get("/test-db", async (req, res) => {
-  const bookings = await Booking.find();
-  res.json(bookings);
+/* -------- Get Bookings -------- */
+
+app.get("/api/bookings", async (req, res) => {
+  try {
+    const bookings = await Booking.find().sort({ createdAt: -1 });
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ message: "Could not load bookings" });
+  }
 });
 
 /* -------- Create Booking -------- */
@@ -84,31 +90,17 @@ app.post("/api/book-hygiene", async (req, res) => {
       `
     };
 
-    /* EMAIL (non-blocking) */
-    transporter.sendMail(mailOptions, (err, info) => {
-      if (err) {
-        console.error("❌ Email failed:", err);
-      } else {
-        console.log("✅ Email sent:", info.response);
-      }
-    });
+    transporter.sendMail(mailOptions).catch(err =>
+      console.log("Email failed:", err)
+    );
 
     res.status(201).json({ message: "Booking submitted!" });
 
   } catch (err) {
-    console.error("❌ Booking error:", err);
+
+    console.error(err);
     res.status(500).json({ message: "Booking failed" });
-  }
-});
 
-/* -------- Get Bookings -------- */
-
-app.get("/api/bookings", async (req, res) => {
-  try {
-    const bookings = await Booking.find().sort({ createdAt: -1 });
-    res.json(bookings);
-  } catch (err) {
-    res.status(500).json({ message: "Could not load bookings" });
   }
 });
 
@@ -125,7 +117,6 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
 
     await Booking.findByIdAndDelete(req.params.id);
 
-    /* EMAIL (non-blocking) */
     transporter.sendMail({
       from: `"DaYiMa Admin" <${process.env.GMAIL_USER}>`,
       to: process.env.GMAIL_USER,
@@ -140,19 +131,15 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
 
       </div>
       `
-    }, (err, info) => {
-      if (err) {
-        console.error("❌ Cancel email failed:", err);
-      } else {
-        console.log("✅ Cancel email sent:", info.response);
-      }
-    });
+    }).catch(err => console.log("Cancel email failed:", err));
 
     res.json({ message: "Booking deleted" });
 
   } catch (err) {
+
     console.error(err);
     res.status(500).json({ message: "Delete failed" });
+
   }
 });
 
