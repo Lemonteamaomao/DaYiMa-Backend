@@ -97,7 +97,7 @@ app.post("/api/book-hygiene", async (req, res) => {
       const info = await transporter.sendMail({
         from: process.env.GMAIL_USER,
         to: process.env.GMAIL_USER,
-        subject: `🌸 NEW ${req.body.workshopType}: ${req.body.organization}`,
+        subject: "NEW " + req.body.workshopType + ": " + req.body.organization,
         html: `
           <h2>New DaYiMa Booking Request</h2>
           <p>A new request has been received.</p>
@@ -153,7 +153,7 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
       const info = await transporter.sendMail({
         from: process.env.GMAIL_USER,
         to: process.env.GMAIL_USER,
-        subject: `🛑 CANCELLED: ${deleted.organization}`,
+       subject: "CANCELLED: " + deleted.organization,
         html: `
           <h2>Booking Cancelled</h2>
           <p>The booking for <strong>${deleted.organization}</strong> has been removed.</p>
