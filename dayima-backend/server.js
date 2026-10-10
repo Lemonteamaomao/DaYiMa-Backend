@@ -162,13 +162,15 @@ app.delete("/api/book-hygiene/:id", async function (req, res) {
   }
 
   try {
-    await sendGmailNotification(
-      "CANCELLED: " + (deleted.organization || "Booking"),
-      "Booking Cancelled\n\n" +
-        "Organization: " + (deleted.organization || "Not provided") + "\n" +
-        "Workshop: " + (deleted.workshopType || "Not provided") + "\n" +
-        "Contact Person: " + (deleted.contactPerson || "Not provided")
-    );
+   
+await sendGmailNotification(
+  "❌ CANCELLED: " + (deleted.organization || "Booking"),
+  "❌ DaYiMa Booking Cancelled\n\n" +
+    "🏢 Organization: " + (deleted.organization || "Not provided") + "\n" +
+    "💧 Workshop: " + (deleted.workshopType || "Not provided") + "\n" +
+    "👤 Contact Person: " + (deleted.contactPerson || "Not provided")
+);
+
   } catch (emailErr) {
     console.error("Booking deleted, but cancellation email failed:", emailErr.message);
   }
