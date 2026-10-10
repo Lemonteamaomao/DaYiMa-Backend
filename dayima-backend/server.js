@@ -1,4 +1,6 @@
+```js
 require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -6,18 +8,26 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 
-app.use(cors({
+app.use(
+  cors({
     origin: "https://lemonteamaomao.github.io",
-    credentials: true
-}));
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
+// ================================
 // Database
-mongoose.connect(process.env.MONGO_URI)
+// ================================
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error("❌ DB Error:", err));
+  .catch((err) => console.error("❌ DB Error:", err));
 
-// Schema
+// ================================
+// Booking Schema
+// ================================
 const bookingSchema = new mongoose.Schema({
   workshopType: String,
   organization: String,
@@ -31,9 +41,12 @@ const bookingSchema = new mongoose.Schema({
   isReplied: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
+
 const Booking = mongoose.model("Booking", bookingSchema);
 
-// Mail Setup (Secure)
+// ================================
+// Email Setup
+// ================================
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -42,51 +55,136 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Routes
+// Verify Gmail configuration when the server starts
+transporter
+  .verify()
+  .then(() => {
+    console.log("✅ Email server is ready");
+  })
+  .catch((err) => {
+    console.error("❌ Email configuration error:", err.message);
+    console.error("Email error code:", err.code || "Unknown");
+  });
+
+// ================================
+// Get All Bookings
+// ================================
 app.get("/api/book-hygiene", async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
-    res.status(500).json({ message: "Error" });
+    console.error("❌ Fetch bookings error:", err);
+    res.status(500).json({ message: "Failed to fetch bookings" });
   }
 });
 
+// ================================
+// Create Booking + Send Email
+// ================================
 app.post("/api/book-hygiene", async (req, res) => {
   try {
+    console.log("📩 New booking request received");
+
+    // Save booking to MongoDB
     const booking = new Booking(req.body);
     await booking.save();
-    
-    // Admin Notification
-    transporter.sendMail({
-      from: `"DaYiMa" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,
-      subject: `🌸 NEW ${req.body.workshopType}: ${req.body.organization}`,
-      html: `<p>New request from <b>${req.body.organization}</b> received.</p>`
-    });
 
-    res.status(201).json({ message: "Success" });
+    console.log("✅ Booking saved:", booking._id.toString());
+
+    // Send notification email
+    try {
+      const info = await transporter.sendMail({
+        from: `"DaYiMa" <${process.env.GMAIL_USER}>`,
+        to: process.env.GMAIL_USER,
+        subject: `🌸 NEW ${req.body.workshopType}: ${req.body.organization}`,
+        html: `
+          <h2>New DaYiMa Booking Request</h2>
+          <p>A new request has been received.</p>
+          <p><strong>Workshop:</strong> ${req.body.workshopType || "Not provided"}</p>
+          <p><strong>Organization:</strong> ${req.body.organization || "Not provided"}</p>
+          <p><strong>Contact Person:</strong> ${req.body.contactPerson || "Not provided"}</p>
+          <p><strong>Email:</strong> ${req.body.email || "Not provided"}</p>
+          <p><strong>Phone:</strong> ${req.body.phone || "Not provided"}</p>
+          <p><strong>Date:</strong> ${req.body.date || "Not provided"}</p>
+          <p><strong>Participants:</strong> ${req.body.participants ?? "Not provided"}</p>
+          <p><strong>Notes:</strong> ${req.body.notes || "None"}</p>
+        `,
+      });
+
+      console.log("✅ Email accepted by mail server:", info.messageId);
+      console.log("📬 Email response:", info.response);
+    } catch (emailErr) {
+      console.error("❌ EMAIL SENDING FAILED");
+      console.error("Error code:", emailErr.code || "Unknown");
+      console.error("Error command:", emailErr.command || "Unknown");
+      console.error("Error response:", emailErr.response || "No response");
+      console.error("Error message:", emailErr.message);
+
+      // The booking is already saved, even if the email fails.
+      return res.status(500).json({
+        message: "Booking saved, but email notification failed.",
+      });
+    }
+
+    return res.status(201).json({
+      message: "Booking submitted successfully and notification email sent.",
+    });
   } catch (err) {
-    res.status(500).json({ message: "Error" });
+    console.error("❌ Booking error:", err);
+    return res.status(500).json({
+      message: "Failed to submit booking.",
+    });
   }
 });
 
+// ================================
+// Delete Booking + Send Cancellation Email
+// ================================
 app.delete("/api/book-hygiene/:id", async (req, res) => {
   try {
     const deleted = await Booking.findByIdAndDelete(req.params.id);
-    if (deleted) {
-      transporter.sendMail({
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    try {
+      const info = await transporter.sendMail({
         from: `"DaYiMa" <${process.env.GMAIL_USER}>`,
         to: process.env.GMAIL_USER,
         subject: `🛑 CANCELLED: ${deleted.organization}`,
-        html: `<p>Booking for ${deleted.organization} removed.</p>`
+        html: `
+          <h2>Booking Cancelled</h2>
+          <p>The booking for <strong>${deleted.organization}</strong> has been removed.</p>
+          <p>Workshop: ${deleted.workshopType || "Not provided"}</p>
+          <p>Contact Person: ${deleted.contactPerson || "Not provided"}</p>
+        `,
+      });
+
+      console.log("✅ Cancellation email accepted:", info.messageId);
+    } catch (emailErr) {
+      console.error("❌ Cancellation email failed:", emailErr.message);
+      console.error("Error code:", emailErr.code || "Unknown");
+
+      return res.status(500).json({
+        message: "Booking deleted, but cancellation email failed.",
       });
     }
-    res.json({ message: "Deleted" });
+
+    return res.json({ message: "Booking deleted and notification sent." });
   } catch (err) {
-    res.status(500).json({ message: "Error" });
+    console.error("❌ Delete booking error:", err);
+    return res.status(500).json({ message: "Failed to delete booking." });
   }
 });
 
+// ================================
+// Start Server
+// ================================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, "0.0.0.0", () => console.log(`🚀 Port ${PORT}`));
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+```
