@@ -22,8 +22,12 @@ app.use(express.json());
 // ================================
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ DB Error:", err));
+  .then(function () {
+    console.log("MongoDB Connected");
+  })
+  .catch(function (err) {
+    console.error("DB Error:", err.message);
+  });
 
 // ================================
 // Booking Schema
@@ -55,26 +59,26 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verify Gmail configuration when the server starts
+// Verify email configuration
 transporter
   .verify()
-  .then(() => {
-    console.log("✅ Email server is ready");
+  .then(function () {
+    console.log("Email server is ready");
   })
-  .catch((err) => {
-    console.error("❌ Email configuration error:", err.message);
+  .catch(function (err) {
+    console.error("Email configuration error:", err.message);
     console.error("Email error code:", err.code || "Unknown");
   });
 
 // ================================
 // Get All Bookings
 // ================================
-app.get("/api/book-hygiene", async (req, res) => {
+app.get("/api/book-hygiene", async function (req, res) {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
-    console.error("❌ Fetch bookings error:", err);
+    console.error("Fetch bookings error:", err.message);
     res.status(500).json({ message: "Failed to fetch bookings" });
   }
 });
@@ -82,46 +86,47 @@ app.get("/api/book-hygiene", async (req, res) => {
 // ================================
 // Create Booking + Send Email
 // ================================
-app.post("/api/book-hygiene", async (req, res) => {
+app.post("/api/book-hygiene", async function (req, res) {
   try {
-    console.log("📩 New booking request received");
+    console.log("New booking request received");
 
     // Save booking to MongoDB
     const booking = new Booking(req.body);
     await booking.save();
 
-    console.log("✅ Booking saved:", booking._id.toString());
+    console.log("Booking saved:", booking._id.toString());
 
     // Send notification email
     try {
       const info = await transporter.sendMail({
         from: process.env.GMAIL_USER,
         to: process.env.GMAIL_USER,
-        subject: "NEW " + req.body.workshopType + ": " + req.body.organization,
-        html: `
-          <h2>New DaYiMa Booking Request</h2>
-          <p>A new request has been received.</p>
-          <p><strong>Workshop:</strong> ${req.body.workshopType || "Not provided"}</p>
-          <p><strong>Organization:</strong> ${req.body.organization || "Not provided"}</p>
-          <p><strong>Contact Person:</strong> ${req.body.contactPerson || "Not provided"}</p>
-          <p><strong>Email:</strong> ${req.body.email || "Not provided"}</p>
-          <p><strong>Phone:</strong> ${req.body.phone || "Not provided"}</p>
-          <p><strong>Date:</strong> ${req.body.date || "Not provided"}</p>
-          <p><strong>Participants:</strong> ${req.body.participants ?? "Not provided"}</p>
-          <p><strong>Notes:</strong> ${req.body.notes || "None"}</p>
-        `,
+        subject:
+          "NEW " +
+          (req.body.workshopType || "Booking") +
+          ": " +
+          (req.body.organization || "Unknown organization"),
+        text:
+          "New DaYiMa Booking Request\n\n" +
+          "Workshop: " + (req.body.workshopType || "Not provided") + "\n" +
+          "Organization: " + (req.body.organization || "Not provided") + "\n" +
+          "Contact Person: " + (req.body.contactPerson || "Not provided") + "\n" +
+          "Email: " + (req.body.email || "Not provided") + "\n" +
+          "Phone: " + (req.body.phone || "Not provided") + "\n" +
+          "Date: " + (req.body.date || "Not provided") + "\n" +
+          "Participants: " + (req.body.participants ?? "Not provided") + "\n" +
+          "Notes: " + (req.body.notes || "None"),
       });
 
-      console.log("✅ Email accepted by mail server:", info.messageId);
-      console.log("📬 Email response:", info.response);
+      console.log("Email accepted by mail server:", info.messageId);
+      console.log("Email response:", info.response);
     } catch (emailErr) {
-      console.error("❌ EMAIL SENDING FAILED");
+      console.error("EMAIL SENDING FAILED");
       console.error("Error code:", emailErr.code || "Unknown");
       console.error("Error command:", emailErr.command || "Unknown");
       console.error("Error response:", emailErr.response || "No response");
       console.error("Error message:", emailErr.message);
 
-      // The booking is already saved, even if the email fails.
       return res.status(500).json({
         message: "Booking saved, but email notification failed.",
       });
@@ -131,7 +136,8 @@ app.post("/api/book-hygiene", async (req, res) => {
       message: "Booking submitted successfully and notification email sent.",
     });
   } catch (err) {
-    console.error("❌ Booking error:", err);
+    console.error("Booking error:", err.message);
+
     return res.status(500).json({
       message: "Failed to submit booking.",
     });
@@ -141,30 +147,31 @@ app.post("/api/book-hygiene", async (req, res) => {
 // ================================
 // Delete Booking + Send Cancellation Email
 // ================================
-app.delete("/api/book-hygiene/:id", async (req, res) => {
+app.delete("/api/book-hygiene/:id", async function (req, res) {
   try {
     const deleted = await Booking.findByIdAndDelete(req.params.id);
 
     if (!deleted) {
-      return res.status(404).json({ message: "Booking not found" });
+      return res.status(404).json({
+        message: "Booking not found",
+      });
     }
 
     try {
       const info = await transporter.sendMail({
         from: process.env.GMAIL_USER,
         to: process.env.GMAIL_USER,
-       subject: "CANCELLED: " + deleted.organization,
-        html: `
-          <h2>Booking Cancelled</h2>
-          <p>The booking for <strong>${deleted.organization}</strong> has been removed.</p>
-          <p>Workshop: ${deleted.workshopType || "Not provided"}</p>
-          <p>Contact Person: ${deleted.contactPerson || "Not provided"}</p>
-        `,
+        subject: "CANCELLED: " + deleted.organization,
+        text:
+          "Booking Cancelled\n\n" +
+          "Organization: " + (deleted.organization || "Not provided") + "\n" +
+          "Workshop: " + (deleted.workshopType || "Not provided") + "\n" +
+          "Contact Person: " + (deleted.contactPerson || "Not provided"),
       });
 
-      console.log("✅ Cancellation email accepted:", info.messageId);
+      console.log("Cancellation email accepted:", info.messageId);
     } catch (emailErr) {
-      console.error("❌ Cancellation email failed:", emailErr.message);
+      console.error("Cancellation email failed:", emailErr.message);
       console.error("Error code:", emailErr.code || "Unknown");
 
       return res.status(500).json({
@@ -172,10 +179,15 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
       });
     }
 
-    return res.json({ message: "Booking deleted and notification sent." });
+    return res.json({
+      message: "Booking deleted and notification sent.",
+    });
   } catch (err) {
-    console.error("❌ Delete booking error:", err);
-    return res.status(500).json({ message: "Failed to delete booking." });
+    console.error("Delete booking error:", err.message);
+
+    return res.status(500).json({
+      message: "Failed to delete booking.",
+    });
   }
 });
 
@@ -184,7 +196,7 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
 // ================================
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", function () {
+  console.log("Server running on port " + PORT);
 });
 ```
