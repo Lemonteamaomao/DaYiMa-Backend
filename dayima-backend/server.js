@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -117,21 +116,23 @@ app.post("/api/book-hygiene", async function (req, res) {
   }
 
   try {
-    await sendGmailNotification(
-      "NEW " +
-        (req.body.workshopType || "Booking") +
-        ": " +
-        (req.body.organization || "Unknown organization"),
-      "New DaYiMa Booking Request\n\n" +
-        "Workshop: " + (req.body.workshopType || "Not provided") + "\n" +
-        "Organization: " + (req.body.organization || "Not provided") + "\n" +
-        "Contact Person: " + (req.body.contactPerson || "Not provided") + "\n" +
-        "Email: " + (req.body.email || "Not provided") + "\n" +
-        "Phone: " + (req.body.phone || "Not provided") + "\n" +
-        "Date: " + (req.body.date || "Not provided") + "\n" +
-        "Participants: " + (req.body.participants ?? "Not provided") + "\n" +
-        "Notes: " + (req.body.notes || "None")
-    );
+    
+await sendGmailNotification(
+  "🌸 NEW " +
+    (req.body.workshopType || "Booking") +
+    ": " +
+    (req.body.organization || "Unknown organization"),
+  "🌸 New DaYiMa Booking Request\n\n" +
+    "💧 Workshop: " + (req.body.workshopType || "Not provided") + "\n" +
+    "🏢 Organization: " + (req.body.organization || "Not provided") + "\n" +
+    "👤 Contact Person: " + (req.body.contactPerson || "Not provided") + "\n" +
+    "📧 Email: " + (req.body.email || "Not provided") + "\n" +
+    "📞 Phone: " + (req.body.phone || "Not provided") + "\n" +
+    "📅 Date: " + (req.body.date || "Not provided") + "\n" +
+    "👥 Participants: " + (req.body.participants ?? "Not provided") + "\n" +
+    "📝 Notes: " + (req.body.notes || "None")
+);
+
   } catch (emailErr) {
     console.error("Booking saved, but email failed:", emailErr.message);
   }
