@@ -95,7 +95,7 @@ app.post("/api/book-hygiene", async (req, res) => {
     // Send notification email
     try {
       const info = await transporter.sendMail({
-        from: `"DaYiMa" <${process.env.GMAIL_USER}>`,
+        from: process.env.GMAIL_USER,
         to: process.env.GMAIL_USER,
         subject: `🌸 NEW ${req.body.workshopType}: ${req.body.organization}`,
         html: `
@@ -151,7 +151,7 @@ app.delete("/api/book-hygiene/:id", async (req, res) => {
 
     try {
       const info = await transporter.sendMail({
-        from: `"DaYiMa" <${process.env.GMAIL_USER}>`,
+        from: process.env.GMAIL_USER,
         to: process.env.GMAIL_USER,
         subject: `🛑 CANCELLED: ${deleted.organization}`,
         html: `
